@@ -8,8 +8,6 @@ static SDL_Renderer *renderer;
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
-#define TWO_EFFECTS 0
-
 static bool init_sdl()
 {
 	if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_HAPTIC|SDL_INIT_JOYSTICK))
@@ -119,14 +117,7 @@ int main(int argc, char *argv[])
 
 	if (SDL_HapticRunEffect(haptic, e1, SDL_HAPTIC_INFINITY))
 		std::cerr << "run effect fails" << std::endl;
-#if TWO_EFFECTS
-	int e2 = SDL_HapticNewEffect(haptic, &effect);
-	if (e2 < 0)
-		std::cerr << "new effect fails" << std::endl;
 
-	if (SDL_HapticRunEffect(haptic, e2, SDL_HAPTIC_INFINITY))
-		std::cerr << "run effect fails" << std::endl;
-#endif
 	bool run = true;
 	while (run) {
 		SDL_Event e;
@@ -144,10 +135,6 @@ int main(int argc, char *argv[])
 
 				if (SDL_HapticUpdateEffect(haptic, e1, &effect))
 					std::cerr << "update effect fails" << std::endl;
-#if TWO_EFFECTS
-				if (SDL_HapticUpdateEffect(haptic, e2, &effect))
-					std::cerr << "update effect fails" << std::endl;
-#endif
 				break;
 			}
 			case SDL_KEYDOWN:
@@ -162,9 +149,6 @@ int main(int argc, char *argv[])
 	}
 
 	SDL_HapticDestroyEffect(haptic, e1);
-#if TWO_EFFECTS
-	SDL_HapticDestroyEffect(haptic, e2);
-#endif
 	SDL_HapticClose(haptic);
 	SDL_JoystickClose(joy);
 	exit_sdl();
