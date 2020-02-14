@@ -28,39 +28,6 @@ static void exit_sdl()
 	SDL_Quit();
 }
 
-static SDL_Joystick *master, *slave;
-
-static bool init_joystick()
-{
-	int nb_joysticks;
-	SDL_Joystick *joy = nullptr;
-
-	nb_joysticks = SDL_NumJoysticks();
-	std::cerr << nb_joysticks << " joysticks found" << std::endl;
-
-	for (int i = 0; i < nb_joysticks; i++) {
-		joy = SDL_JoystickOpen(i);
-		if (!joy)
-			continue;
-
-		if (!slave && SDL_JoystickIsHaptic(joy))
-			slave = joy;
-		else if (!master)
-			master = joy;
-		else
-			SDL_JoystickClose(joy);
-	}
-
-	if (master)
-		std::cerr << "master: " << SDL_JoystickName(master)
-			  << std::endl;
-	if (slave)
-		std::cerr << "slave : " << SDL_JoystickName(slave)
-			  << std::endl;
-
-	return master && slave;
-}
-
 static int query_haptic(SDL_Haptic *haptic)
 {
 	static std::string properties[] = {
@@ -79,6 +46,57 @@ static int query_haptic(SDL_Haptic *haptic)
 	return caps;
 }
 
+static SDL_Joystick *master, *slave;
+static SDL_Haptic *slave_haptic;
+
+static bool init_joystick()
+{
+	int nb_joysticks;
+	SDL_Joystick *joy = nullptr;
+
+	nb_joysticks = SDL_NumJoysticks();
+	std::cerr << nb_joysticks << " joysticks found" << std::endl;
+
+	for (int i = 0; i < nb_joysticks && !(master && slave); i++) {
+		joy = SDL_JoystickOpen(i);
+		if (!joy)
+			continue;
+
+		if (!slave && SDL_JoystickIsHaptic(joy)) {
+			slave = joy;
+			std::cerr << "slave : " << SDL_JoystickName(slave)
+				  << " " << SDL_JoystickInstanceID(slave)
+				  << std::endl;
+
+			slave_haptic = SDL_HapticOpenFromJoystick(slave);
+			if (slave_haptic) {
+				query_haptic(slave_haptic);
+				SDL_HapticSetAutocenter(slave_haptic, 0);
+			} else {
+				SDL_JoystickClose(slave);
+				slave = nullptr;
+			}
+		} else if (!master) {
+			master = joy;
+			std::cerr << "master: " << SDL_JoystickName(master)
+				  << " " << SDL_JoystickInstanceID(master)
+				  << std::endl;
+
+			if (SDL_JoystickIsHaptic(master)) {
+				SDL_Haptic *h;
+				h = SDL_HapticOpenFromJoystick(master);
+				if (h) {
+					query_haptic(h);
+					SDL_HapticSetAutocenter(h, 100);
+				}
+			}
+		} else
+			SDL_JoystickClose(joy);
+	}
+
+	return master && slave;
+}
+
 int main(int argc, char *argv[])
 {
 	if (!init_sdl())
@@ -90,16 +108,6 @@ int main(int argc, char *argv[])
 		std::cerr << "no joystick found" << std::endl;
 		return -1;
 	}
-
-	SDL_Haptic *haptic;
-	haptic = SDL_HapticOpenFromJoystick(slave);
-	if (haptic == nullptr) {
-		std::cerr << "HapticOpen fails" << std::endl;
-		return -1;
-	}
-
-	query_haptic(haptic);
-	SDL_HapticSetAutocenter(haptic, 0);
 
 	// if (SDL_HapticRumbleInit(haptic))
 	// 	std::cerr << "RumbleInit error" << std::endl;
@@ -122,11 +130,11 @@ int main(int argc, char *argv[])
 	effect.condition.right_coeff[1] = 0x7fff;
 	effect.condition.left_coeff[1] = 0x7fff;
 
- 	int e1 = SDL_HapticNewEffect(haptic, &effect);
+	int e1 = SDL_HapticNewEffect(slave_haptic, &effect);
 	if (e1 < 0)
 		std::cerr << "new effect fails" << std::endl;
 
-	if (SDL_HapticRunEffect(haptic, e1, SDL_HAPTIC_INFINITY))
+	if (SDL_HapticRunEffect(slave_haptic, e1, SDL_HAPTIC_INFINITY))
 		std::cerr << "run effect fails" << std::endl;
 
 	bool run = true;
@@ -156,11 +164,10 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
-		SDL_Delay(1);
 	}
 
-	SDL_HapticDestroyEffect(haptic, e1);
-	SDL_HapticClose(haptic);
+	SDL_HapticDestroyEffect(slave_haptic, e1);
+	SDL_HapticClose(slave_haptic);
 	SDL_JoystickClose(master);
 	SDL_JoystickClose(slave);
 	exit_sdl();
