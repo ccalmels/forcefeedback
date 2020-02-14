@@ -143,6 +143,7 @@ int main(int argc, char *argv[])
 
 		while (SDL_PollEvent(&e)) {
 			switch (e.type) {
+#if 0
 			case SDL_MOUSEMOTION:
 			{
 				float center[2];
@@ -152,10 +153,24 @@ int main(int argc, char *argv[])
 				effect.condition.center[0] = 2 * center[0] * 0x7fff;
 				effect.condition.center[1] = 2 * center[1] * 0x7fff;
 
-				if (SDL_HapticUpdateEffect(haptic, e1, &effect))
+				if (SDL_HapticUpdateEffect(slave_haptic, e1, &effect))
 					std::cerr << "update effect fails" << std::endl;
 				break;
 			}
+#endif
+			case SDL_JOYAXISMOTION:
+				if (e.jaxis.which == SDL_JoystickInstanceID(master)) {
+					float center[2];
+					center[0] = (float)SDL_JoystickGetAxis(master, 0) / (2 * 32767);
+					center[1] = (float)SDL_JoystickGetAxis(master, 1) / (2 * 32767);
+
+					effect.condition.center[0] = 2. * center[0] * 0x7fff;
+					effect.condition.center[1] = 2. * center[1] * 0x7fff;
+
+					if (SDL_HapticUpdateEffect(slave_haptic, e1, &effect))
+						std::cerr << "update effect fails" << std::endl;
+				}
+				break;
 			case SDL_KEYDOWN:
 				if (e.key.keysym.sym != SDLK_ESCAPE)
 					break;
