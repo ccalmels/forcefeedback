@@ -28,7 +28,9 @@ static void exit_sdl()
 	SDL_Quit();
 }
 
-static SDL_Joystick *get_joystick()
+static SDL_Joystick *master, *slave;
+
+static bool init_joystick()
 {
 	int nb_joysticks;
 	SDL_Joystick *joy = nullptr;
@@ -38,16 +40,25 @@ static SDL_Joystick *get_joystick()
 
 	for (int i = 0; i < nb_joysticks; i++) {
 		joy = SDL_JoystickOpen(i);
-		if (joy) {
-			if (SDL_JoystickIsHaptic(joy)) {
-				std::cerr << "name: " << SDL_JoystickName(joy)
-					  << std::endl;
-				break;
-			}
-		}
+		if (!joy)
+			continue;
+
+		if (!slave && SDL_JoystickIsHaptic(joy))
+			slave = joy;
+		else if (!master)
+			master = joy;
+		else
+			SDL_JoystickClose(joy);
 	}
 
-	return joy;
+	if (master)
+		std::cerr << "master: " << SDL_JoystickName(master)
+			  << std::endl;
+	if (slave)
+		std::cerr << "slave : " << SDL_JoystickName(slave)
+			  << std::endl;
+
+	return master && slave;
 }
 
 static int query_haptic(SDL_Haptic *haptic)
@@ -75,13 +86,13 @@ int main(int argc, char *argv[])
 
 	SDL_SetWindowGrab(window, SDL_TRUE);
 
-	SDL_Joystick *joy;
-	joy = get_joystick();
-	if (!joy)
+	if (!init_joystick()) {
 		std::cerr << "no joystick found" << std::endl;
+		return -1;
+	}
 
 	SDL_Haptic *haptic;
-	haptic = SDL_HapticOpenFromJoystick(joy);
+	haptic = SDL_HapticOpenFromJoystick(slave);
 	if (haptic == nullptr) {
 		std::cerr << "HapticOpen fails" << std::endl;
 		return -1;
@@ -150,7 +161,8 @@ int main(int argc, char *argv[])
 
 	SDL_HapticDestroyEffect(haptic, e1);
 	SDL_HapticClose(haptic);
-	SDL_JoystickClose(joy);
+	SDL_JoystickClose(master);
+	SDL_JoystickClose(slave);
 	exit_sdl();
 	return 0;
 }
